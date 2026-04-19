@@ -52,11 +52,18 @@ pipeline {
             steps {
                 dir('qa-backend') {
                     sh '''
-                        echo "TEST BACKGROUND"
-                        sleep 2
-                        setsid sh -c "exec sleep 300 > /tmp/sleeptest.log 2>&1 < /dev/null" &
-                        echo "AFTER BACKGROUND"
-                        exit 0
+                        echo "=== START BACKEND ==="
+                        JAR_FILE=$(ls target/*.jar | grep -v '.original' | head -n 1)
+                        echo "Using jar: $JAR_FILE"
+
+                        rm -f backend.log backend.pid
+
+                        nohup java -jar "$JAR_FILE" --server.port=$BACKEND_PORT > backend.log 2>&1 &
+                        echo $! > backend.pid
+
+                        echo "Backend PID: $(cat backend.pid)"
+                        sleep 10
+                        cat backend.log || true
                     '''
                 }
             }
@@ -65,18 +72,15 @@ pipeline {
         stage('Wait for Backend') {
             steps {
                 sh '''
-                    echo "=== WAIT FOR BACKEND ==="
                     echo "Waiting on $API_BASE_URL"
-
                     for i in $(seq 1 60); do
                       if curl -sf "$API_BASE_URL/users" > /dev/null; then
                         echo "Backend is up on $API_BASE_URL"
                         exit 0
                       fi
-                      echo "Waiting for backend... attempt $i"
+                      echo "Waiting... attempt $i"
                       sleep 2
                     done
-
                     echo "Backend did not start in time"
                     exit 1
                 '''
@@ -88,7 +92,6 @@ pipeline {
                 dir('qa-api-tests') {
                     withEnv(["BASE_URL=${API_BASE_URL}"]) {
                         sh '''
-                            echo "=== RUN API TESTS ==="
                             echo "Running tests against $BASE_URL"
                             npx playwright test
                         '''
@@ -105,26 +108,13 @@ pipeline {
 
     post {
         always {
-            script {
-                sh '''
-                    echo "=== FINAL JAVA PROCESS CHECK ==="
-                    ps -ef | grep qa-backend-0.0.1-SNAPSHOT.jar | grep -v grep || true
-                '''
-
-                if (fileExists('qa-backend/backend.log')) {
-                    echo '=== FINAL BACKEND LOG ==='
-                    sh 'cat qa-backend/backend.log || true'
-                }
-
-                sh '''
-                    PID=$(ps -ef | grep qa-backend-0.0.1-SNAPSHOT.jar | grep -v grep | awk '{print $2}' | head -n 1)
-                    if [ -n "$PID" ]; then
-                      echo "Stopping backend PID: $PID"
-                      kill $PID || true
-                    fi
-                '''
-            }
-
+            sh 'cat qa-backend/backend.log || true'
+            sh '''
+                if [ -f qa-backend/backend.pid ]; then
+                  PID=$(cat qa-backend/backend.pid)
+                  kill $PID || true
+                fi
+            '''
             archiveArtifacts artifacts: 'qa-backend/backend.log', allowEmptyArchive: true
             archiveArtifacts artifacts: 'qa-api-tests/playwright-report/**', allowEmptyArchive: true
             archiveArtifacts artifacts: 'qa-api-tests/test-results/**', allowEmptyArchive: true
