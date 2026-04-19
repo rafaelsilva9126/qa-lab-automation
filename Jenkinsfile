@@ -53,19 +53,25 @@ pipeline {
                 dir('qa-backend') {
                     sh '''
                         echo "=== START BACKEND ==="
-                        echo "Port: $BACKEND_PORT"
                         ls -la target
 
-                        nohup java -jar target/*.jar --server.port=$BACKEND_PORT > backend.log 2>&1 &
+                        JAR_FILE=$(ls target/*.jar | head -n 1)
+                        echo "Using jar: $JAR_FILE"
+
+                        nohup env JENKINS_NODE_COOKIE=dontKillMe \
+                          java -jar "$JAR_FILE" --server.port=$BACKEND_PORT \
+                          > backend.log 2>&1 < /dev/null &
+
                         echo $! > backend.pid
 
-                        echo "Backend PID:"
-                        cat backend.pid
-
+                        echo "Backend PID: $(cat backend.pid)"
                         sleep 5
 
                         echo "=== INITIAL BACKEND LOG ==="
                         cat backend.log || true
+
+                        echo "=== PROCESS CHECK ==="
+                        ps -p $(cat backend.pid) -o pid,cmd || true
                     '''
                 }
             }
@@ -77,8 +83,8 @@ pipeline {
                     echo "=== WAIT FOR BACKEND ==="
                     echo "Waiting on $API_BASE_URL"
 
-                    for i in {1..60}; do
-                      if curl -sf $API_BASE_URL/users > /dev/null; then
+                    for i in $(seq 1 60); do
+                      if curl -sf "$API_BASE_URL/users" > /dev/null; then
                         echo "Backend is up on $API_BASE_URL"
                         exit 0
                       fi
