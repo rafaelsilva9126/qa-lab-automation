@@ -22,11 +22,9 @@ export default defineConfig({
 
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:8080',
-
     extraHTTPHeaders: {
       'Content-Type': 'application/json',
     },
-
     trace: 'on-first-retry',
   },
 });
