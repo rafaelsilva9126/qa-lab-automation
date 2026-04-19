@@ -48,31 +48,19 @@ pipeline {
             }
         }
 
-        stage('Start Backend') {
+       stage('Start Backend') {
             steps {
                 dir('qa-backend') {
                     sh '''
-                        echo "=== START BACKEND ==="
-                        echo "Port: $BACKEND_PORT"
-                        echo "Listing target folder..."
+                        echo "=== DEBUG TARGET ==="
                         ls -la target
 
-                        nohup java -jar target/*.jar --server.port=$BACKEND_PORT > backend.log 2>&1 &
-                        echo $! > backend.pid
-
-                        echo "Started backend with PID:"
-                        cat backend.pid
-
-                        echo "Waiting 5 seconds before checking logs..."
-                        sleep 5
-
-                        echo "=== BACKEND LOG (initial) ==="
-                        cat backend.log || true
+                        echo "=== RUN JAR MANUALLY ==="
+                        java -jar target/*.jar --server.port=$BACKEND_PORT
                     '''
                 }
             }
         }
-
         stage('Wait for Backend') {
             steps {
                 sh '''
