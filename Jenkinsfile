@@ -55,7 +55,7 @@ pipeline {
                         echo "=== START BACKEND ==="
                         ls -la target
 
-                        JAR_FILE=$(ls target/*.jar | head -n 1)
+                        JAR_FILE=$(ls target/*.jar | grep -v '.original' | head -n 1)
                         echo "Using jar: $JAR_FILE"
 
                         nohup env JENKINS_NODE_COOKIE=dontKillMe \
@@ -65,7 +65,7 @@ pipeline {
                         echo $! > backend.pid
 
                         echo "Backend PID: $(cat backend.pid)"
-                        sleep 5
+                        sleep 8
 
                         echo "=== INITIAL BACKEND LOG ==="
                         cat backend.log || true
