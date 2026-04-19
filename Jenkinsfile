@@ -52,26 +52,8 @@ pipeline {
             steps {
                 dir('qa-backend') {
                     sh '''
-                        echo "=== START BACKEND ==="
-                        ls -la target
-
-                        JAR_FILE=$(ls target/*.jar | grep -v '.original' | head -n 1)
-                        echo "Using jar: $JAR_FILE"
-
-                        nohup env JENKINS_NODE_COOKIE=dontKillMe \
-                          java -jar "$JAR_FILE" --server.port=$BACKEND_PORT \
-                          > backend.log 2>&1 < /dev/null &
-
-                        echo $! > backend.pid
-
-                        echo "Backend PID: $(cat backend.pid)"
-                        sleep 8
-
-                        echo "=== INITIAL BACKEND LOG ==="
-                        cat backend.log || true
-
-                        echo "=== PROCESS CHECK ==="
-                        ps -p $(cat backend.pid) -o pid,cmd || true
+                        echo "=== START BACKEND WITH SPRING BOOT MAVEN PLUGIN ==="
+                        ./mvnw spring-boot:start -Dspring-boot.run.arguments=--server.port=$BACKEND_PORT
                     '''
                 }
             }
@@ -83,7 +65,7 @@ pipeline {
                     echo "=== WAIT FOR BACKEND ==="
                     echo "Waiting on $API_BASE_URL"
 
-                    for i in $(seq 1 60); do
+                    for i in $(seq 1 90); do
                       if curl -sf "$API_BASE_URL/users" > /dev/null; then
                         echo "Backend is up on $API_BASE_URL"
                         exit 0
@@ -121,21 +103,14 @@ pipeline {
     post {
         always {
             script {
-                if (fileExists('qa-backend/backend.log')) {
-                    echo '=== FINAL BACKEND LOG ==='
-                    sh 'cat qa-backend/backend.log || true'
-                }
-
-                if (fileExists('qa-backend/backend.pid')) {
+                dir('qa-backend') {
                     sh '''
-                        PID=$(cat qa-backend/backend.pid)
-                        echo "Stopping backend PID: $PID"
-                        kill $PID || true
+                        echo "=== STOP BACKEND ==="
+                        ./mvnw spring-boot:stop || true
                     '''
                 }
             }
 
-            archiveArtifacts artifacts: 'qa-backend/backend.log', allowEmptyArchive: true
             archiveArtifacts artifacts: 'qa-api-tests/playwright-report/**', allowEmptyArchive: true
             archiveArtifacts artifacts: 'qa-api-tests/test-results/**', allowEmptyArchive: true
         }
