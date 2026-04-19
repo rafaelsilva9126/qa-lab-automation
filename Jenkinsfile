@@ -52,28 +52,11 @@ pipeline {
             steps {
                 dir('qa-backend') {
                     sh '''
-                        echo "=== START BACKEND ==="
-                        ls -la target
-
-                        JAR_FILE=$(ls target/*.jar | grep -v '.original' | head -n 1)
-                        echo "Using jar: $JAR_FILE"
-
-                        rm -f backend.pid backend.log
-
-                        export BUILD_ID=dontKillMe
-                        export JENKINS_NODE_COOKIE=dontKillMe
-
-                        setsid sh -c "exec java -jar '$JAR_FILE' --server.port=$BACKEND_PORT > backend.log 2>&1 < /dev/null" &
-                        echo $! > backend.pid
-
-                        echo "Backend launcher PID: $(cat backend.pid)"
-                        sleep 8
-
-                        echo "=== INITIAL BACKEND LOG ==="
-                        cat backend.log || true
-
-                        echo "=== PROCESS CHECK ==="
-                        ps -ef | grep qa-backend-0.0.1-SNAPSHOT.jar | grep -v grep || true
+                        echo "TEST BACKGROUND"
+                        sleep 2
+                        setsid sh -c "exec sleep 300 > /tmp/sleeptest.log 2>&1 < /dev/null" &
+                        echo "AFTER BACKGROUND"
+                        exit 0
                     '''
                 }
             }
