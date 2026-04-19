@@ -7,8 +7,9 @@ pipeline {
     }
 
     environment {
-        BACKEND_PORT = '8081'
         API_BASE_URL = 'http://localhost:8081'
+        CONTAINER_NAME = 'qa-backend-container'
+        IMAGE_NAME = 'qa-backend'
     }
 
     stages {
@@ -40,45 +41,34 @@ pipeline {
             }
         }
 
-        stage('Install API Test Dependencies') {
+        stage('Build Docker Image') {
             steps {
-                dir('qa-api-tests') {
-                    sh 'npm ci'
-                }
+                sh 'docker build -t $IMAGE_NAME ./qa-backend'
             }
         }
 
-        stage('Start Backend') {
+        stage('Start Backend Container') {
             steps {
-                dir('qa-backend') {
-                    sh '''
-                        echo "=== START BACKEND ==="
-                        JAR_FILE=$(ls target/*.jar | grep -v '.original' | head -n 1)
-                        echo "Using jar: $JAR_FILE"
-
-                        rm -f backend.log backend.pid
-
-                        nohup java -jar "$JAR_FILE" --server.port=$BACKEND_PORT > backend.log 2>&1 &
-                        echo $! > backend.pid
-
-                        echo "Backend PID: $(cat backend.pid)"
-                        sleep 10
-                        cat backend.log || true
-                    '''
-                }
+                sh '''
+                    docker rm -f $CONTAINER_NAME || true
+                    docker run -d \
+                      --name $CONTAINER_NAME \
+                      -p 8081:8081 \
+                      -e PORT=8081 \
+                      $IMAGE_NAME
+                '''
             }
         }
 
         stage('Wait for Backend') {
             steps {
                 sh '''
-                    echo "Waiting on $API_BASE_URL"
                     for i in $(seq 1 60); do
                       if curl -sf "$API_BASE_URL/users" > /dev/null; then
                         echo "Backend is up on $API_BASE_URL"
                         exit 0
                       fi
-                      echo "Waiting... attempt $i"
+                      echo "Waiting for backend... attempt $i"
                       sleep 2
                     done
                     echo "Backend did not start in time"
@@ -87,14 +77,19 @@ pipeline {
             }
         }
 
+        stage('Install API Test Dependencies') {
+            steps {
+                dir('qa-api-tests') {
+                    sh 'npm ci'
+                }
+            }
+        }
+
         stage('Run API Tests') {
             steps {
                 dir('qa-api-tests') {
                     withEnv(["BASE_URL=${API_BASE_URL}"]) {
-                        sh '''
-                            echo "Running tests against $BASE_URL"
-                            npx playwright test
-                        '''
+                        sh 'npx playwright test'
                     }
                 }
             }
@@ -108,14 +103,9 @@ pipeline {
 
     post {
         always {
-            sh 'cat qa-backend/backend.log || true'
-            sh '''
-                if [ -f qa-backend/backend.pid ]; then
-                  PID=$(cat qa-backend/backend.pid)
-                  kill $PID || true
-                fi
-            '''
-            archiveArtifacts artifacts: 'qa-backend/backend.log', allowEmptyArchive: true
+            sh 'docker logs $CONTAINER_NAME || true'
+            sh 'docker rm -f $CONTAINER_NAME || true'
+
             archiveArtifacts artifacts: 'qa-api-tests/playwright-report/**', allowEmptyArchive: true
             archiveArtifacts artifacts: 'qa-api-tests/test-results/**', allowEmptyArchive: true
         }
