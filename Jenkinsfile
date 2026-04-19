@@ -7,8 +7,8 @@ pipeline {
     }
 
     environment {
-        BACKEND_PORT = '8080'
-        BACKEND_URL = 'http://localhost:8080'
+        BACKEND_PORT = '8081'
+        BASE_URL = 'http://localhost:8081'
     }
 
     stages {
@@ -44,7 +44,6 @@ pipeline {
             steps {
                 dir('qa-api-tests') {
                     sh 'npm ci'
-                    sh 'npx playwright install'
                 }
             }
         }
@@ -53,7 +52,7 @@ pipeline {
             steps {
                 dir('qa-backend') {
                     sh '''
-                        nohup java -jar target/*.jar > backend.log 2>&1 &
+                        nohup java -jar target/*.jar --server.port=$BACKEND_PORT > backend.log 2>&1 &
                         echo $! > backend.pid
                     '''
                 }
@@ -64,11 +63,11 @@ pipeline {
             steps {
                 sh '''
                     for i in {1..30}; do
-                      if curl -s http://localhost:8080/users > /dev/null; then
+                      if curl -sf $BASE_URL/users > /dev/null; then
                         echo "Backend is up!"
                         exit 0
                       fi
-                      echo "Waiting for backend..."
+                      echo "Waiting for backend on $BASE_URL ..."
                       sleep 2
                     done
                     echo "Backend did not start in time"
@@ -81,7 +80,7 @@ pipeline {
             steps {
                 dir('qa-api-tests') {
                     sh '''
-                        export BASE_URL=http://localhost:8080
+                        export BASE_URL=$BASE_URL
                         npx playwright test
                     '''
                 }
@@ -91,6 +90,7 @@ pipeline {
 
     post {
         always {
+            junit allowEmptyResults: true, testResults: 'qa-api-tests/test-results/*.xml'
             archiveArtifacts artifacts: 'qa-backend/backend.log', allowEmptyArchive: true
             archiveArtifacts artifacts: 'qa-api-tests/playwright-report/**', allowEmptyArchive: true
             archiveArtifacts artifacts: 'qa-api-tests/test-results/**', allowEmptyArchive: true
@@ -99,9 +99,7 @@ pipeline {
                 if (fileExists('qa-backend/backend.pid')) {
                     sh '''
                         PID=$(cat qa-backend/backend.pid)
-                        if ps -p $PID > /dev/null; then
-                          kill $PID
-                        fi
+                        kill $PID || true
                     '''
                 }
             }
