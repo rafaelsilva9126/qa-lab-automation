@@ -64,7 +64,7 @@ pipeline {
                 sh '''
                     for i in {1..30}; do
                       if curl -sf $BASE_URL/users > /dev/null; then
-                        echo "Backend is up!"
+                        echo "Backend is up on $BASE_URL"
                         exit 0
                       fi
                       echo "Waiting for backend on $BASE_URL ..."
@@ -80,6 +80,7 @@ pipeline {
             steps {
                 dir('qa-api-tests') {
                     sh '''
+                        echo "Running tests against $BASE_URL"
                         export BASE_URL=$BASE_URL
                         npx playwright test
                     '''
