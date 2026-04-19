@@ -76,18 +76,17 @@ pipeline {
             }
         }
 
-        stage('Run API Tests') {
-            steps {
-                dir('qa-api-tests') {
-                    withEnv(["BASE_URL=${API_BASE_URL}"]) {
-                        sh '''
-                            echo "Running tests against $BASE_URL"
-                            npx playwright test
-                        '''
-                    }
-                }
+      stage('Run API Tests') {
+        steps {
+            dir('qa-api-tests') {
+                sh '''
+                    echo "=== PIPELINE MARKER 8081 ==="
+                    env | sort | grep BASE_URL || true
+                    npx playwright test
+                '''
             }
-        }
+        }   
+    }
     }
 
     post {
