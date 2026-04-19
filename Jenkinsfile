@@ -76,17 +76,19 @@ pipeline {
             }
         }
 
-      stage('Run API Tests') {
-        steps {
-            dir('qa-api-tests') {
-                sh '''
-                    echo "=== PIPELINE MARKER 8081 ==="
-                    env | sort | grep BASE_URL || true
-                    npx playwright test
-                '''
-            }
-        }   
+    stage('Run API Tests') {
+    steps {
+        dir('qa-api-tests') {
+            sh '''
+                echo "=== JENKINSFILE UPDATED ==="
+                echo "API_BASE_URL=$API_BASE_URL"
+                echo "BASE_URL=$BASE_URL"
+                env | sort | grep BASE_URL || true
+                exit 1
+            '''
+        }
     }
+}
     }
 
     post {
