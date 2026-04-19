@@ -27,7 +27,7 @@ pipeline {
             }
             post {
                 always {
-                    junit 'qa-backend/target/surefire-reports/*.xml'
+                    junit allowEmptyResults: true, testResults: 'qa-backend/target/surefire-reports/*.xml'
                 }
             }
         }
@@ -52,8 +52,22 @@ pipeline {
             steps {
                 dir('qa-backend') {
                     sh '''
+                        echo "=== START BACKEND ==="
+                        echo "Port: $BACKEND_PORT"
+                        echo "Listing target folder..."
+                        ls -la target
+
                         nohup java -jar target/*.jar --server.port=$BACKEND_PORT > backend.log 2>&1 &
                         echo $! > backend.pid
+
+                        echo "Started backend with PID:"
+                        cat backend.pid
+
+                        echo "Waiting 5 seconds before checking logs..."
+                        sleep 5
+
+                        echo "=== BACKEND LOG (initial) ==="
+                        cat backend.log || true
                     '''
                 }
             }
@@ -62,50 +76,68 @@ pipeline {
         stage('Wait for Backend') {
             steps {
                 sh '''
+                    echo "=== WAIT FOR BACKEND ==="
                     echo "Waiting on $API_BASE_URL"
-                    for i in {1..30}; do
+
+                    for i in {1..60}; do
                       if curl -sf $API_BASE_URL/users > /dev/null; then
                         echo "Backend is up on $API_BASE_URL"
                         exit 0
                       fi
+                      echo "Waiting for backend... attempt $i"
                       sleep 2
                     done
+
                     echo "Backend did not start in time"
                     exit 1
                 '''
             }
         }
 
-    stage('Run API Tests') {
-    steps {
-        dir('qa-api-tests') {
-            sh '''
-                echo "=== JENKINSFILE UPDATED ==="
-                echo "API_BASE_URL=$API_BASE_URL"
-                echo "BASE_URL=$BASE_URL"
-                env | sort | grep BASE_URL || true
-                exit 1
-            '''
+        stage('Run API Tests') {
+            steps {
+                dir('qa-api-tests') {
+                    withEnv(["BASE_URL=${API_BASE_URL}"]) {
+                        sh '''
+                            echo "=== RUN API TESTS ==="
+                            echo "Running tests against $BASE_URL"
+                            env | sort | grep BASE_URL || true
+
+                            npx playwright test
+                        '''
+                    }
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'qa-api-tests/test-results/*.xml'
+                }
+            }
         }
-    }
-}
     }
 
     post {
         always {
-            junit allowEmptyResults: true, testResults: 'qa-api-tests/test-results/*.xml'
-            archiveArtifacts artifacts: 'qa-backend/backend.log', allowEmptyArchive: true
-            archiveArtifacts artifacts: 'qa-api-tests/playwright-report/**', allowEmptyArchive: true
-            archiveArtifacts artifacts: 'qa-api-tests/test-results/**', allowEmptyArchive: true
-
             script {
+                echo '=== POST ACTIONS ==='
+
+                if (fileExists('qa-backend/backend.log')) {
+                    echo '=== FINAL BACKEND LOG ==='
+                    sh 'cat qa-backend/backend.log || true'
+                }
+
                 if (fileExists('qa-backend/backend.pid')) {
                     sh '''
                         PID=$(cat qa-backend/backend.pid)
+                        echo "Stopping backend PID: $PID"
                         kill $PID || true
                     '''
                 }
             }
+
+            archiveArtifacts artifacts: 'qa-backend/backend.log', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'qa-api-tests/playwright-report/**', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'qa-api-tests/test-results/**', allowEmptyArchive: true
         }
     }
 }
