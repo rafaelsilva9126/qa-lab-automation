@@ -48,23 +48,30 @@ pipeline {
             }
         }
 
-       stage('Start Backend') {
+        stage('Start Backend') {
             steps {
                 dir('qa-backend') {
                     sh '''
-                        echo "=== DEBUG TARGET ==="
+                        echo "=== START BACKEND ==="
                         ls -la target
 
-                        echo "=== RUN JAR MANUALLY ==="
-                        java -jar target/*.jar --server.port=$BACKEND_PORT
+                        nohup java -jar target/*.jar --server.port=$BACKEND_PORT > backend.log 2>&1 &
+                        echo $! > backend.pid
+
+                        echo "Backend PID:"
+                        cat backend.pid
+
+                        sleep 2
+                        echo "=== INITIAL BACKEND LOG ==="
+                        cat backend.log || true
                     '''
                 }
             }
         }
+
         stage('Wait for Backend') {
             steps {
                 sh '''
-                    echo "=== WAIT FOR BACKEND ==="
                     echo "Waiting on $API_BASE_URL"
 
                     for i in {1..60}; do
@@ -87,10 +94,7 @@ pipeline {
                 dir('qa-api-tests') {
                     withEnv(["BASE_URL=${API_BASE_URL}"]) {
                         sh '''
-                            echo "=== RUN API TESTS ==="
                             echo "Running tests against $BASE_URL"
-                            env | sort | grep BASE_URL || true
-
                             npx playwright test
                         '''
                     }
@@ -107,8 +111,6 @@ pipeline {
     post {
         always {
             script {
-                echo '=== POST ACTIONS ==='
-
                 if (fileExists('qa-backend/backend.log')) {
                     echo '=== FINAL BACKEND LOG ==='
                     sh 'cat qa-backend/backend.log || true'
