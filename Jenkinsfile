@@ -8,7 +8,7 @@ pipeline {
 
     environment {
         BACKEND_PORT = '8081'
-        BASE_URL = 'http://localhost:8081'
+        API_BASE_URL = 'http://localhost:8081'
     }
 
     stages {
@@ -62,12 +62,12 @@ pipeline {
         stage('Wait for Backend') {
             steps {
                 sh '''
+                    echo "Waiting on $API_BASE_URL"
                     for i in {1..30}; do
-                      if curl -sf $BASE_URL/users > /dev/null; then
-                        echo "Backend is up on $BASE_URL"
+                      if curl -sf $API_BASE_URL/users > /dev/null; then
+                        echo "Backend is up on $API_BASE_URL"
                         exit 0
                       fi
-                      echo "Waiting for backend on $BASE_URL ..."
                       sleep 2
                     done
                     echo "Backend did not start in time"
@@ -79,11 +79,12 @@ pipeline {
         stage('Run API Tests') {
             steps {
                 dir('qa-api-tests') {
-                    sh '''
-                        echo "Running tests against $BASE_URL"
-                        export BASE_URL=$BASE_URL
-                        npx playwright test
-                    '''
+                    withEnv(["BASE_URL=${API_BASE_URL}"]) {
+                        sh '''
+                            echo "Running tests against $BASE_URL"
+                            npx playwright test
+                        '''
+                    }
                 }
             }
         }
