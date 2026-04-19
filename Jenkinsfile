@@ -52,8 +52,28 @@ pipeline {
             steps {
                 dir('qa-backend') {
                     sh '''
-                        echo "=== START BACKEND WITH SPRING BOOT MAVEN PLUGIN ==="
-                        ./mvnw spring-boot:start -Dspring-boot.run.arguments=--server.port=$BACKEND_PORT
+                        echo "=== START BACKEND ==="
+                        ls -la target
+
+                        JAR_FILE=$(ls target/*.jar | grep -v '.original' | head -n 1)
+                        echo "Using jar: $JAR_FILE"
+
+                        rm -f backend.pid backend.log
+
+                        export BUILD_ID=dontKillMe
+                        export JENKINS_NODE_COOKIE=dontKillMe
+
+                        setsid sh -c "exec java -jar '$JAR_FILE' --server.port=$BACKEND_PORT > backend.log 2>&1 < /dev/null" &
+                        echo $! > backend.pid
+
+                        echo "Backend launcher PID: $(cat backend.pid)"
+                        sleep 8
+
+                        echo "=== INITIAL BACKEND LOG ==="
+                        cat backend.log || true
+
+                        echo "=== PROCESS CHECK ==="
+                        ps -ef | grep qa-backend-0.0.1-SNAPSHOT.jar | grep -v grep || true
                     '''
                 }
             }
@@ -65,7 +85,7 @@ pipeline {
                     echo "=== WAIT FOR BACKEND ==="
                     echo "Waiting on $API_BASE_URL"
 
-                    for i in $(seq 1 90); do
+                    for i in $(seq 1 60); do
                       if curl -sf "$API_BASE_URL/users" > /dev/null; then
                         echo "Backend is up on $API_BASE_URL"
                         exit 0
@@ -103,14 +123,26 @@ pipeline {
     post {
         always {
             script {
-                dir('qa-backend') {
-                    sh '''
-                        echo "=== STOP BACKEND ==="
-                        ./mvnw spring-boot:stop || true
-                    '''
+                sh '''
+                    echo "=== FINAL JAVA PROCESS CHECK ==="
+                    ps -ef | grep qa-backend-0.0.1-SNAPSHOT.jar | grep -v grep || true
+                '''
+
+                if (fileExists('qa-backend/backend.log')) {
+                    echo '=== FINAL BACKEND LOG ==='
+                    sh 'cat qa-backend/backend.log || true'
                 }
+
+                sh '''
+                    PID=$(ps -ef | grep qa-backend-0.0.1-SNAPSHOT.jar | grep -v grep | awk '{print $2}' | head -n 1)
+                    if [ -n "$PID" ]; then
+                      echo "Stopping backend PID: $PID"
+                      kill $PID || true
+                    fi
+                '''
             }
 
+            archiveArtifacts artifacts: 'qa-backend/backend.log', allowEmptyArchive: true
             archiveArtifacts artifacts: 'qa-api-tests/playwright-report/**', allowEmptyArchive: true
             archiveArtifacts artifacts: 'qa-api-tests/test-results/**', allowEmptyArchive: true
         }
