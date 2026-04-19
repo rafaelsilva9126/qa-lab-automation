@@ -1,11 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "strict": true,
+    "module": "commonjs",
+    "types": ["node", "@playwright/test"],
     "esModuleInterop": true,
-    "types": ["node", "@playwright/test"]
-  },
-  "include": ["tests", "clients", "helpers"]
+    "strict": true
+  }
 }
