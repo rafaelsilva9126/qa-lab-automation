@@ -7,9 +7,10 @@ pipeline {
     }
 
     environment {
-        API_BASE_URL = 'http://localhost:8081'
-        CONTAINER_NAME = 'qa-backend-container'
         IMAGE_NAME = 'qa-backend'
+        CONTAINER_NAME = 'qa-backend-container'
+        API_BASE_URL = 'http://localhost:8081'
+        API_PORT = '8081'
     }
 
     stages {
@@ -43,7 +44,9 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $IMAGE_NAME ./qa-backend'
+                sh '''
+                    docker build -t $IMAGE_NAME ./qa-backend
+                '''
             }
         }
 
@@ -51,9 +54,10 @@ pipeline {
             steps {
                 sh '''
                     docker rm -f $CONTAINER_NAME || true
+
                     docker run -d \
                       --name $CONTAINER_NAME \
-                      -p 8081:8081 \
+                      -p $API_PORT:8081 \
                       -e PORT=8081 \
                       $IMAGE_NAME
                 '''
@@ -63,6 +67,8 @@ pipeline {
         stage('Wait for Backend') {
             steps {
                 sh '''
+                    echo "Waiting on $API_BASE_URL"
+
                     for i in $(seq 1 60); do
                       if curl -sf "$API_BASE_URL/users" > /dev/null; then
                         echo "Backend is up on $API_BASE_URL"
@@ -71,7 +77,9 @@ pipeline {
                       echo "Waiting for backend... attempt $i"
                       sleep 2
                     done
+
                     echo "Backend did not start in time"
+                    docker logs $CONTAINER_NAME || true
                     exit 1
                 '''
             }
@@ -89,7 +97,10 @@ pipeline {
             steps {
                 dir('qa-api-tests') {
                     withEnv(["BASE_URL=${API_BASE_URL}"]) {
-                        sh 'npx playwright test'
+                        sh '''
+                            echo "Running tests against $BASE_URL"
+                            npx playwright test
+                        '''
                     }
                 }
             }
@@ -103,8 +114,13 @@ pipeline {
 
     post {
         always {
-            sh 'docker logs $CONTAINER_NAME || true'
-            sh 'docker rm -f $CONTAINER_NAME || true'
+            sh '''
+                echo "=== CONTAINER LOGS ==="
+                docker logs $CONTAINER_NAME || true
+
+                echo "=== STOP AND REMOVE CONTAINER ==="
+                docker rm -f $CONTAINER_NAME || true
+            '''
 
             archiveArtifacts artifacts: 'qa-api-tests/playwright-report/**', allowEmptyArchive: true
             archiveArtifacts artifacts: 'qa-api-tests/test-results/**', allowEmptyArchive: true
