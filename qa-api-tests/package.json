@@ -1,0 +1,14 @@
+{
+  "name": "qa-api-tests",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "playwright test",
+    "test:users": "playwright test tests/users.spec.ts",
+    "test:products": "playwright test tests/products.spec.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}

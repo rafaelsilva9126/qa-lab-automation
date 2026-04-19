@@ -1,0 +1,30 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "/CMDSigBackend/OTPManagement",
+    "headers": {
+      "Content-Type": {
+        "contains": "text/xml"
+      },
+      "SOAPAction": {
+        "contains": "requestCode"
+      }
+    },
+    "bodyPatterns": [
+      {
+        "matchesXPath": "//soap:Envelope/soap:Body/ns2:requestCode",
+        "xPathNamespaces": {
+          "soap": "http://schemas.xmlsoap.org/soap/envelope/",
+          "ns2": "http://ws.services.backend.cmd.gov.pt/"
+        }
+      }
+    ]
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/xml; charset=utf-8"
+    },
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <ns2:requestCodeResponse xmlns:ns2=\"http://ws.services.backend.cmd.gov.pt/\">\n      <return>\n        <code>123456</code>\n        <status>SUCCESS</status>\n      </return>\n    </ns2:requestCodeResponse>\n  </soap:Body>\n</soap:Envelope>"
+  }
+}
