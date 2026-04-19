@@ -53,6 +53,7 @@ pipeline {
                 dir('qa-backend') {
                     sh '''
                         echo "=== START BACKEND ==="
+                        echo "Port: $BACKEND_PORT"
                         ls -la target
 
                         nohup java -jar target/*.jar --server.port=$BACKEND_PORT > backend.log 2>&1 &
@@ -61,7 +62,8 @@ pipeline {
                         echo "Backend PID:"
                         cat backend.pid
 
-                        sleep 2
+                        sleep 5
+
                         echo "=== INITIAL BACKEND LOG ==="
                         cat backend.log || true
                     '''
@@ -72,6 +74,7 @@ pipeline {
         stage('Wait for Backend') {
             steps {
                 sh '''
+                    echo "=== WAIT FOR BACKEND ==="
                     echo "Waiting on $API_BASE_URL"
 
                     for i in {1..60}; do
@@ -94,6 +97,7 @@ pipeline {
                 dir('qa-api-tests') {
                     withEnv(["BASE_URL=${API_BASE_URL}"]) {
                         sh '''
+                            echo "=== RUN API TESTS ==="
                             echo "Running tests against $BASE_URL"
                             npx playwright test
                         '''
