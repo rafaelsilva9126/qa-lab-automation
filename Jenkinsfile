@@ -9,7 +9,7 @@ pipeline {
     environment {
         IMAGE_NAME = 'qa-backend'
         CONTAINER_NAME = 'qa-backend-container'
-        API_BASE_URL = 'http://localhost:8081'
+        API_BASE_URL = 'http://host.docker.internal:8081'
         API_PORT = '8081'
     }
 
@@ -74,6 +74,9 @@ pipeline {
                       -p $API_PORT:8081 \
                       -e PORT=8081 \
                       $IMAGE_NAME
+
+                    echo "=== Started container ==="
+                    docker ps -a
                 '''
             }
         }
@@ -88,11 +91,17 @@ pipeline {
                         echo "Backend is up on $API_BASE_URL"
                         exit 0
                       fi
+
                       echo "Waiting for backend... attempt $i"
+                      if [ $i -eq 10 ] || [ $i -eq 20 ] || [ $i -eq 30 ]; then
+                        echo "=== Intermediate container logs ==="
+                        docker logs $CONTAINER_NAME || true
+                      fi
                       sleep 2
                     done
 
                     echo "Backend did not start in time"
+                    echo "=== Final container logs ==="
                     docker logs $CONTAINER_NAME || true
                     exit 1
                 '''
