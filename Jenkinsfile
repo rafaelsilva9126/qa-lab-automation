@@ -53,8 +53,22 @@ pipeline {
         stage('Start Backend Container') {
             steps {
                 sh '''
+                    echo "=== Containers before cleanup ==="
+                    docker ps -a || true
+
+                    echo "=== Removing previous container with same name ==="
                     docker rm -f $CONTAINER_NAME || true
 
+                    echo "=== Removing any container publishing port $API_PORT ==="
+                    PORT_CONTAINERS=$(docker ps -q --filter "publish=$API_PORT")
+                    if [ ! -z "$PORT_CONTAINERS" ]; then
+                      docker rm -f $PORT_CONTAINERS || true
+                    fi
+
+                    echo "=== Containers after cleanup ==="
+                    docker ps -a || true
+
+                    echo "=== Starting backend container ==="
                     docker run -d \
                       --name $CONTAINER_NAME \
                       -p $API_PORT:8081 \
