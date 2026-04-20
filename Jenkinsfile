@@ -82,7 +82,7 @@ pipeline {
                         echo "Backend is up"
                         exit 0
                       fi
-                      echo "Waiting... $i"
+                      echo "Waiting... attempt $i"
                       sleep 2
                     done
 
