@@ -9,8 +9,8 @@ pipeline {
     environment {
         IMAGE_NAME = 'qa-backend'
         CONTAINER_NAME = 'qa-backend-container'
-        API_BASE_URL = 'http://host.docker.internal:8081'
-        API_PORT = '8081'
+        NETWORK_NAME = 'qa-network'
+        API_BASE_URL = 'http://qa-backend-container:8081'
     }
 
     stages {
@@ -50,33 +50,24 @@ pipeline {
             }
         }
 
+        stage('Ensure Docker Network') {
+            steps {
+                sh '''
+                    docker network inspect $NETWORK_NAME >/dev/null 2>&1 || docker network create $NETWORK_NAME
+                '''
+            }
+        }
+
         stage('Start Backend Container') {
             steps {
                 sh '''
-                    echo "=== Containers before cleanup ==="
-                    docker ps -a || true
-
-                    echo "=== Removing previous container with same name ==="
                     docker rm -f $CONTAINER_NAME || true
 
-                    echo "=== Removing any container publishing port $API_PORT ==="
-                    PORT_CONTAINERS=$(docker ps -q --filter "publish=$API_PORT")
-                    if [ ! -z "$PORT_CONTAINERS" ]; then
-                      docker rm -f $PORT_CONTAINERS || true
-                    fi
-
-                    echo "=== Containers after cleanup ==="
-                    docker ps -a || true
-
-                    echo "=== Starting backend container ==="
                     docker run -d \
                       --name $CONTAINER_NAME \
-                      -p $API_PORT:8081 \
+                      --network $NETWORK_NAME \
                       -e PORT=8081 \
                       $IMAGE_NAME
-
-                    echo "=== Started container ==="
-                    docker ps -a
                 '''
             }
         }
@@ -88,20 +79,14 @@ pipeline {
 
                     for i in $(seq 1 60); do
                       if curl -sf "$API_BASE_URL/users" > /dev/null; then
-                        echo "Backend is up on $API_BASE_URL"
+                        echo "Backend is up"
                         exit 0
                       fi
-
-                      echo "Waiting for backend... attempt $i"
-                      if [ $i -eq 10 ] || [ $i -eq 20 ] || [ $i -eq 30 ]; then
-                        echo "=== Intermediate container logs ==="
-                        docker logs $CONTAINER_NAME || true
-                      fi
+                      echo "Waiting... $i"
                       sleep 2
                     done
 
-                    echo "Backend did not start in time"
-                    echo "=== Final container logs ==="
+                    echo "Backend failed to start"
                     docker logs $CONTAINER_NAME || true
                     exit 1
                 '''
@@ -141,12 +126,21 @@ pipeline {
                 echo "=== CONTAINER LOGS ==="
                 docker logs $CONTAINER_NAME || true
 
-                echo "=== STOP AND REMOVE CONTAINER ==="
+                echo "=== CLEANUP ==="
                 docker rm -f $CONTAINER_NAME || true
             '''
 
             archiveArtifacts artifacts: 'qa-api-tests/playwright-report/**', allowEmptyArchive: true
             archiveArtifacts artifacts: 'qa-api-tests/test-results/**', allowEmptyArchive: true
+
+            publishHTML([
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: 'qa-api-tests/playwright-report',
+                reportFiles: 'index.html',
+                reportName: 'Playwright Report'
+            ])
         }
     }
 }
