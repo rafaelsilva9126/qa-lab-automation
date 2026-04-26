@@ -23,8 +23,14 @@ public class UserController {
     public UserResponse createUser(@Valid @RequestBody CreateUserRequest request) {
         return service.createUser(request);
     }
+
     @GetMapping
-        public List<UserResponse> getAllUsers() {
-    return service.getAllUsers();
-}
+    public List<UserResponse> getAllUsers() {
+        return service.getAllUsers();
+    }
+
+    @GetMapping("/{id}")
+    public UserResponse getUserById(@PathVariable Long id) {
+        return service.getUserById(id);
+    }
 }
